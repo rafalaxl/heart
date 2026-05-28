@@ -538,13 +538,7 @@
         // Tratamento de Redimensionamento da Tela
         window.addEventListener('resize', adjustLayout);
 
-        // Reiniciar a animação ao tocar/clicar em qualquer lugar da tela
-        window.addEventListener('click', () => {
-            animationState.uProgress = 0.0;
-            animationState.uMorphProgress = 0.0;
-            updateUniforms();
-            tl.restart();
-        });
+
     </script>
 </body>
 </html>
