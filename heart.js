@@ -18,8 +18,12 @@ for (let i = 0; i < length; i += step) {
     
     vertices.push(targetX, targetY, targetZ);
     
-    // Posição de origem original (centro do coração: 300, -276, 0)
-    aStart.push(600 / 2, -552 / 2, 0);
+    // Posição de origem espalhada em uma enorme nuvem cósmica ao redor do coração (X: ±400, Y: ±400, Z: ±250)
+    aStart.push(
+        300 + (Math.random() - 0.5) * 800,
+        -276 + (Math.random() - 0.5) * 800,
+        (Math.random() - 0.5) * 500
+    );
     
     // Stagger original baseado no índice i: i * 0.002
     aRandomDelay.push(i * 0.002);
