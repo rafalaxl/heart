@@ -202,6 +202,44 @@
             50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 8px var(--accent-pink); }
             100% { transform: scale(0.9); opacity: 0.6; }
         }
+
+        /* Responsividade Mobile-First */
+        @media (max-width: 768px) {
+            .ui-container {
+                padding: 1.5rem 1rem;
+                align-items: center;
+            }
+            header {
+                text-align: center;
+                margin-top: 1rem;
+            }
+            h1 {
+                font-size: 1.8rem;
+            }
+            p.subtitle {
+                font-size: 0.75rem;
+            }
+            .control-panel {
+                align-self: center;
+                width: calc(100% - 2rem);
+                max-width: 300px;
+                padding: 1.25rem;
+                gap: 0.75rem;
+                margin-bottom: 3.5rem;
+            }
+            .btn {
+                padding: 0.75rem 1.25rem;
+                font-size: 0.9rem;
+            }
+            .instructions {
+                bottom: 1rem;
+                right: 50%;
+                transform: translateX(50%);
+                font-size: 0.75rem;
+                white-space: nowrap;
+                padding: 0.5rem 1rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -270,6 +308,33 @@
         controls.dampingFactor = 0.05;
         controls.target.set(300, -276, 0); // Foca no centro do coração
 
+        // Declarar material no escopo global para o ajuste dinâmico
+        let material;
+
+        // Função para ajustar câmera e tamanho de partículas para Mobile-First
+        function adjustLayout() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+            
+            if (width < 768) {
+                // Afasta a câmera no celular para o coração caber inteiro (tela vertical)
+                camera.position.z = Math.max(650, 480 * (768 / width));
+                if (material) {
+                    material.size = 14; // Partículas maiores em celulares de alta densidade
+                }
+            } else {
+                camera.position.z = 500;
+                if (material) {
+                    material.size = 8; // Partículas menores e mais detalhadas no desktop
+                }
+            }
+        }
+        adjustLayout();
+
         // Criando uma textura circular brilhante em memória para as partículas
         function createParticleGlowTexture() {
             const canvas = document.createElement('canvas');
@@ -309,7 +374,7 @@
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
         // Material brilhante para as partículas
-        const material = new THREE.PointsMaterial({
+        material = new THREE.PointsMaterial({
             size: 8,
             map: particleTexture,
             transparent: true,
@@ -317,6 +382,7 @@
             depthWrite: false,
             color: 0xffffff
         });
+        adjustLayout(); // Aplica o tamanho correto da partícula conforme a tela atual
 
         // Adiciona o sistema de partículas à cena
         const particleSystem = new THREE.Points(geometry, material);
@@ -347,11 +413,7 @@
         animate();
 
         // Tratamento de Redimensionamento da Tela
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        window.addEventListener('resize', adjustLayout);
 
         // Botão para reiniciar a animação
         document.getElementById('btn-replay').addEventListener('click', () => {
