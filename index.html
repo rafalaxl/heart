@@ -286,9 +286,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 
     <script>
-        // Declarando globalmente para que o script heart.js as enxergue
-        let tl = gsap.timeline();
-        
         // Configuração inicial do Three.js
         const canvas = document.querySelector('#webgl-canvas');
         const scene = new THREE.Scene();
@@ -308,8 +305,9 @@
         controls.dampingFactor = 0.05;
         controls.target.set(300, -276, 0); // Foca no centro do coração
 
-        // Declarar material no escopo global para o ajuste dinâmico
+        // Declarar material e timeline no escopo global
         let material;
+        let tl;
 
         // Função para ajustar câmera e tamanho de partículas para Mobile-First
         function adjustLayout() {
@@ -323,13 +321,13 @@
             if (width < 768) {
                 // Afasta a câmera no celular para o coração caber inteiro (tela vertical)
                 camera.position.z = Math.max(650, 480 * (768 / width));
-                if (material) {
-                    material.size = 14; // Partículas maiores em celulares de alta densidade
+                if (material && material.uniforms) {
+                    material.uniforms.uSize.value = 14.0; // Partículas maiores em celulares
                 }
             } else {
                 camera.position.z = 500;
-                if (material) {
-                    material.size = 8; // Partículas menores e mais detalhadas no desktop
+                if (material && material.uniforms) {
+                    material.uniforms.uSize.value = 8.0; // Partículas menores no desktop
                 }
             }
         }
@@ -356,39 +354,107 @@
         const particleTexture = createParticleGlowTexture();
     </script>
 
-    <!-- Agora carregamos o heart.js, que preencherá o array "vertices" e a timeline "tl" -->
+    <!-- Agora carregamos o heart.js, que preencherá as listas de dados no escopo global -->
     <script src="heart.js"></script>
 
     <script>
-        // Após o heart.js ter rodado, criamos a geometria com base nos vértices gerados
+        // Custom Shaders para performance 60fps na GPU
+        const vertexShader = `
+            uniform float uProgress;
+            uniform float uSize;
+            attribute vec3 aStart;
+            attribute float aRandomDelay;
+            attribute vec3 aRandomOffset;
+            varying vec3 vColor;
+            varying float vAlpha;
+
+            void main() {
+                // Ajusta o progresso de cada partícula considerando seu atraso
+                float progress = clamp((uProgress - aRandomDelay) / (1.0 - aRandomDelay), 0.0, 1.0);
+                
+                // Easing Cubic In-Out feito na GPU para suavidade total
+                float t = progress;
+                float ease = t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0;
+                
+                vec3 target = position;
+                vec3 start = aStart + aRandomOffset * (1.0 - ease);
+                
+                // Trajetória em redemoinho espiral (swirl/vortex)
+                vec3 mixedPos = mix(start, target, ease);
+                
+                float angle = ease * 3.14159265 * 2.0;
+                float spiralRadius = (1.0 - ease) * 120.0;
+                mixedPos.x += sin(angle + position.y * 0.02) * spiralRadius;
+                mixedPos.z += cos(angle + position.x * 0.02) * spiralRadius;
+                
+                // Projeção tridimensional
+                vec4 mvPosition = modelViewMatrix * vec4(mixedPos, 1.0);
+                gl_Position = projectionMatrix * mvPosition;
+                
+                // Atenuação de tamanho baseado no zoom/distância da câmera
+                gl_PointSize = uSize * (300.0 / -mvPosition.z);
+                
+                // Gradiente vertical: rosa-neon na base, roxo no topo
+                float heightFactor = clamp((position.y + 480.0) / 380.0, 0.0, 1.0);
+                vColor = mix(vec3(1.0, 0.16, 0.45), vec3(0.54, 0.17, 0.89), heightFactor);
+                
+                // Transparência baseada na decolagem
+                vAlpha = smoothstep(0.0, 0.15, progress);
+            }
+        `;
+
+        const fragmentShader = `
+            uniform sampler2D uTexture;
+            varying vec3 vColor;
+            varying float vAlpha;
+
+            void main() {
+                vec4 texColor = texture2D(uTexture, gl_PointCoord);
+                if (texColor.a < 0.05) discard;
+                gl_FragColor = vec4(vColor * texColor.rgb, texColor.a * vAlpha);
+            }
+        `;
+
+        // Criamos os buffers de geometria na GPU com os arrays extraídos pelo heart.js
         const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(vertices.length * 3);
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        geometry.setAttribute('aStart', new THREE.Float32BufferAttribute(aStart, 3));
+        geometry.setAttribute('aRandomDelay', new THREE.Float32BufferAttribute(aRandomDelay, 1));
+        geometry.setAttribute('aRandomOffset', new THREE.Float32BufferAttribute(aRandomOffset, 3));
 
-        // Preenche o buffer inicial
-        for (let i = 0; i < vertices.length; i++) {
-            positions[i * 3] = vertices[i].x;
-            positions[i * 3 + 1] = vertices[i].y;
-            positions[i * 3 + 2] = vertices[i].z;
-        }
-
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-        // Material brilhante para as partículas
-        material = new THREE.PointsMaterial({
-            size: 8,
-            map: particleTexture,
+        // Material personalizado rodando Shaders na GPU
+        material = new THREE.ShaderMaterial({
+            vertexShader: vertexShader,
+            fragmentShader: fragmentShader,
+            uniforms: {
+                uProgress: { value: 0.0 },
+                uSize: { value: 8.0 },
+                uTexture: { value: particleTexture }
+            },
             transparent: true,
             blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            color: 0xffffff
+            depthWrite: false
         });
-        adjustLayout(); // Aplica o tamanho correto da partícula conforme a tela atual
+        
+        adjustLayout(); // Aplica a calibração de tamanhos inicial
 
         // Adiciona o sistema de partículas à cena
         const particleSystem = new THREE.Points(geometry, material);
         scene.add(particleSystem);
 
-        // Loop de Renderização
+        // Configuração da timeline do GSAP (animando apenas 1 variável uniforme na GPU!)
+        const progressObj = { value: 0 };
+        tl = gsap.timeline({ repeat: -1, yoyo: true, repeatDelay: 1.5 });
+        tl.to(progressObj, {
+            value: 1.0,
+            duration: 3.2,
+            ease: "sine.inOut",
+            onUpdate: () => {
+                material.uniforms.uProgress.value = progressObj.value;
+            }
+        });
+
+        // Loop de Renderização otimizado (0% de esforço da CPU em loops complexos)
         let clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
@@ -396,17 +462,10 @@
             // Atualiza os controles
             controls.update();
 
-            // Sincroniza a posição animada do GSAP de volta na geometria do Three.js
-            const posAttr = geometry.attributes.position;
-            for (let i = 0; i < vertices.length; i++) {
-                posAttr.setXYZ(i, vertices[i].x, vertices[i].y, vertices[i].z);
-            }
-            posAttr.needsUpdate = true;
-
             // Rotação sutil automática do sistema inteiro para dinamismo 3D
             const time = clock.getElapsedTime();
-            particleSystem.rotation.y = Math.sin(time * 0.2) * 0.15;
-            particleSystem.rotation.x = Math.cos(time * 0.1) * 0.1;
+            particleSystem.rotation.y = Math.sin(time * 0.15) * 0.1;
+            particleSystem.rotation.x = Math.cos(time * 0.08) * 0.08;
 
             renderer.render(scene, camera);
         }
