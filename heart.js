@@ -5,14 +5,20 @@ const aStart = [];
 const aRandomDelay = [];
 const aRandomOffset = [];
 
-// Passo de 0.6 garante cerca de 1.000 partículas para o contorno do coração.
-// Densidade perfeita para definição visual no celular e altíssimo desempenho.
-const step = 0.6; 
+// Passo de 0.35 para gerar mais partículas (~1.700),
+// criando um aspecto de nuvem/nebulosa tridimensional mais densa e rica.
+const step = 0.35; 
 for (let i = 0; i < length; i += step) {
     const point = path.getPointAtLength(i);
     
-    // Posição final (formato de coração)
-    vertices.push(point.x, -point.y, 0);
+    // Adiciona espessura tridimensional ao destino final das partículas
+    // transformando o contorno fino em uma nuvem volumosa de estrelas
+    const targetX = point.x + (Math.random() - 0.5) * 35;
+    const targetY = -point.y + (Math.random() - 0.5) * 35;
+    const targetZ = (Math.random() - 0.5) * 35;
+    
+    // Posição final (formato de coração volumoso)
+    vertices.push(targetX, targetY, targetZ);
     
     // Posição de origem (centro do coração: 300, -276, 0)
     aStart.push(600 / 2, -552 / 2, 0);

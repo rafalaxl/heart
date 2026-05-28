@@ -252,33 +252,7 @@
         <path id="path" d="M 300, 140 C 240, 40 100, 40 100, 200 C 100, 320 220, 400 300, 480 C 380, 400 500, 320 500, 200 C 500, 40 360, 40 300, 140 Z" />
     </svg>
 
-    <div class="ui-container">
-        <header>
-            <h1>Heart Particles</h1>
-            <p class="subtitle">Tridimensional SVG Path Extraction & Animation</p>
-        </header>
 
-        <div class="control-panel">
-            <div class="control-group">
-                <label>Interações</label>
-                <button class="btn" id="btn-replay">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                    Reiniciar Animação
-                </button>
-            </div>
-            <div class="control-group">
-                <label>Controles 3D</label>
-                <p style="font-size: 0.8rem; color: rgba(255,255,255,0.4); line-height: 1.4;">
-                    Clique e arraste com o mouse para girar o coração em 3D. Role a roda do mouse para dar zoom.
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <div class="instructions">
-        <span class="dot-pulse"></span>
-        Arraste para rotacionar
-    </div>
 
     <!-- Scripts Externos (Three.js, GSAP e OrbitControls) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -474,8 +448,8 @@
         // Tratamento de Redimensionamento da Tela
         window.addEventListener('resize', adjustLayout);
 
-        // Botão para reiniciar a animação
-        document.getElementById('btn-replay').addEventListener('click', () => {
+        // Reiniciar a animação ao tocar/clicar em qualquer lugar da tela
+        window.addEventListener('click', () => {
             tl.restart();
         });
     </script>
