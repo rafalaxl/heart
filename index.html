@@ -11,7 +11,7 @@
     
     <style>
         :root {
-            --bg-color: #080711;
+            --bg-color: #020205;
             --accent-pink: #ff2a74;
             --accent-purple: #8a2be2;
             --text-color: #ffffff;
@@ -38,7 +38,7 @@
             align-items: center;
         }
 
-        /* Efeito de fundo gradiente animado */
+        /* Efeito de fundo gradiente animado (extremamente sutil para não tirar o brilho das partículas) */
         .background-glow {
             position: absolute;
             top: 50%;
@@ -46,7 +46,7 @@
             transform: translate(-50%, -50%);
             width: 800px;
             height: 800px;
-            background: radial-gradient(circle, rgba(255, 42, 116, 0.15) 0%, rgba(138, 43, 226, 0.08) 50%, rgba(0, 0, 0, 0) 70%);
+            background: radial-gradient(circle, rgba(0, 240, 255, 0.04) 0%, rgba(138, 43, 226, 0.01) 65%, rgba(0, 0, 0, 0) 80%);
             pointer-events: none;
             z-index: 0;
             filter: blur(80px);
@@ -263,7 +263,7 @@
         // Configuração inicial do Three.js
         const canvas = document.querySelector('#webgl-canvas');
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x080711, 0.0015);
+        scene.fog = new THREE.FogExp2(0x020205, 0.0015);
 
         // Câmera posicionada para enquadrar o coração (centro original em 300, -276, 0)
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
@@ -308,6 +308,7 @@
         adjustLayout();
 
         // Criando uma textura circular brilhante em memória para as partículas
+        // Criada em branco puro para que a cor final aplicada pelo Shader tenha brilho e saturação máxima!
         function createParticleGlowTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 64;
@@ -316,9 +317,9 @@
             
             const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
             gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-            gradient.addColorStop(0.2, 'rgba(255, 50, 120, 0.8)');
-            gradient.addColorStop(0.5, 'rgba(138, 43, 226, 0.2)');
-            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
+            gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.25)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
             
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, 64, 64);
@@ -368,9 +369,20 @@
                 // Atenuação de tamanho baseado no zoom/distância da câmera
                 gl_PointSize = uSize * (300.0 / -mvPosition.z);
                 
-                // Gradiente vertical: rosa-neon na base, roxo no topo
+                // Gradiente vertical triplo: Ciano na base, Rosa no meio, Roxo no topo
+                // Isso dá um contraste espetacular contra o fundo cósmico preto!
                 float heightFactor = clamp((position.y + 480.0) / 380.0, 0.0, 1.0);
-                vColor = mix(vec3(1.0, 0.16, 0.45), vec3(0.54, 0.17, 0.89), heightFactor);
+                vec3 cyan = vec3(0.0, 0.95, 1.0);
+                vec3 pink = vec3(1.0, 0.08, 0.58);
+                vec3 purple = vec3(0.58, 0.0, 1.0);
+                
+                vec3 mixedColor;
+                if (heightFactor < 0.5) {
+                    mixedColor = mix(cyan, pink, heightFactor * 2.0);
+                } else {
+                    mixedColor = mix(pink, purple, (heightFactor - 0.5) * 2.0);
+                }
+                vColor = mixedColor;
                 
                 // Transparência baseada na decolagem
                 vAlpha = smoothstep(0.0, 0.15, progress);
