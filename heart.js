@@ -3,35 +3,27 @@ const length = path.getTotalLength();
 const vertices = [];
 const aStart = [];
 const aRandomDelay = [];
-const aRandomOffset = [];
+const aDuration = [];
 
-// Passo de 0.35 para gerar mais partículas (~1.700),
-// criando um aspecto de nuvem/nebulosa tridimensional mais densa e rica.
-const step = 0.35; 
+// Passo de 0.1 original (gera cerca de 17.000 pontos para máxima densidade)
+const step = 0.1; 
 for (let i = 0; i < length; i += step) {
     const point = path.getPointAtLength(i);
     
     // Adiciona espessura tridimensional ao destino final das partículas
-    // transformando o contorno fino em uma nuvem volumosa de estrelas
-    const targetX = point.x + (Math.random() - 0.5) * 35;
-    const targetY = -point.y + (Math.random() - 0.5) * 35;
-    const targetZ = (Math.random() - 0.5) * 35;
+    // conforme o comportamento original do desvio aleatório
+    const targetX = point.x + (Math.random() - 0.5) * 30;
+    const targetY = -point.y + (Math.random() - 0.5) * 30;
+    const targetZ = (Math.random() - 0.5) * 70;
     
-    // Posição final (formato de coração volumoso)
     vertices.push(targetX, targetY, targetZ);
     
-    // Posição de origem (centro do coração: 300, -276, 0)
+    // Posição de origem original (centro do coração: 300, -276, 0)
     aStart.push(600 / 2, -552 / 2, 0);
     
-    // Atraso de animação individual para cada partícula (stagger na GPU)
-    // Combina a ordem sequencial no caminho com um ruído aleatório
-    const progressAlongPath = i / length;
-    aRandomDelay.push(progressAlongPath * 0.45 + Math.random() * 0.15);
+    // Stagger original baseado no índice i: i * 0.002
+    aRandomDelay.push(i * 0.002);
     
-    // Ruído/Offset tridimensional para dispersão no início
-    aRandomOffset.push(
-        (Math.random() - 0.5) * 450,
-        (Math.random() - 0.5) * 450,
-        (Math.random() - 0.5) * 350
-    );
+    // Duração original aleatória de 2 a 5 segundos
+    aDuration.push(2.0 + Math.random() * 3.0);
 }
