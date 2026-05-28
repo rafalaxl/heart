@@ -327,8 +327,12 @@
         // Custom Shaders para performance 60fps na GPU
         const vertexShader = `
             uniform float uProgress;
+            uniform float uMorphProgress;
             uniform float uSize;
+            uniform float uTime;
+            uniform vec3 uMouse;
             attribute vec3 aStart;
+            attribute vec3 aTarget2;
             attribute float aRandomDelay;
             attribute float aDuration;
             varying vec3 vColor;
@@ -344,10 +348,20 @@
                 float ease = t < 0.5 ? 2.0 * t * t : 1.0 - pow(-2.0 * t + 2.0, 2.0) / 2.0;
                 
                 vec3 start = aStart;
-                vec3 target = position;
                 
-                // Movimento linear a partir do centro (idêntico à animação original)
+                // Posição final desejada: faz a interpolação (morph) entre o Coração (position) e o Infinito (aTarget2)
+                vec3 target = mix(position, aTarget2, uMorphProgress);
+                
+                // Movimento linear a partir da nuvem dispersa
                 vec3 mixedPos = mix(start, target, ease);
+                
+                // --- Interação física de repulsão por cursor/toque ---
+                float dist = distance(mixedPos, uMouse);
+                if (dist < 160.0) {
+                    float force = smoothstep(160.0, 0.0, dist);
+                    vec3 dir = normalize(mixedPos - uMouse + vec3(0.0001));
+                    mixedPos += dir * force * 55.0; // Empurra a poeira cósmica
+                }
                 
                 // Projeção tridimensional
                 vec4 mvPosition = modelViewMatrix * vec4(mixedPos, 1.0);
@@ -363,6 +377,19 @@
                 
                 vec3 spaceGreen = vec3(0.0, 1.0, 0.5);   // Verde galáctico brilhante
                 vec3 spacePurple = vec3(0.7, 0.05, 1.0); // Roxo profundo estelar
+                
+                // Efeito aurora: as cores mudam lenta e suavemente ao longo do tempo (uTime)
+                spaceGreen.r += sin(uTime * 0.2) * 0.35;
+                spaceGreen.g += cos(uTime * 0.25) * 0.25;
+                spaceGreen.b += sin(uTime * 0.3) * 0.25;
+                
+                spacePurple.r += cos(uTime * 0.2) * 0.3;
+                spacePurple.g += sin(uTime * 0.3) * 0.35;
+                spacePurple.b += cos(uTime * 0.25) * 0.25;
+                
+                spaceGreen = clamp(spaceGreen, 0.0, 1.0);
+                spacePurple = clamp(spacePurple, 0.0, 1.0);
+                
                 vColor = mix(spaceGreen, spacePurple, mixFactor);
                 
                 // Transparência baseada na decolagem original
@@ -388,6 +415,7 @@
         geometry.setAttribute('aStart', new THREE.Float32BufferAttribute(aStart, 3));
         geometry.setAttribute('aRandomDelay', new THREE.Float32BufferAttribute(aRandomDelay, 1));
         geometry.setAttribute('aDuration', new THREE.Float32BufferAttribute(aDuration, 1));
+        geometry.setAttribute('aTarget2', new THREE.Float32BufferAttribute(aTarget2, 3));
 
         // Material personalizado rodando Shaders na GPU
         material = new THREE.ShaderMaterial({
@@ -395,7 +423,10 @@
             fragmentShader: fragmentShader,
             uniforms: {
                 uProgress: { value: 0.0 },
+                uMorphProgress: { value: 0.0 },
                 uSize: { value: 8.0 },
+                uTime: { value: 0.0 },
+                uMouse: { value: new THREE.Vector3(9999.0, 9999.0, 9999.0) },
                 uTexture: { value: particleTexture }
             },
             transparent: true,
@@ -409,20 +440,79 @@
         const particleSystem = new THREE.Points(geometry, material);
         scene.add(particleSystem);
 
-        // Configuração da timeline do GSAP baseada no tempo total calculado
+        // Configuração de Raycasting do Mouse/Pointer para plano Z = 0
+        const raycaster = new THREE.Raycaster();
+        const mouseVector = new THREE.Vector2();
+        const planeZ = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        const mouse3D = new THREE.Vector3(9999, 9999, 9999);
+
+        function updateMousePosition(event) {
+            const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+            const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+            mouseVector.x = (clientX / window.innerWidth) * 2 - 1;
+            mouseVector.y = -(clientY / window.innerHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouseVector, camera);
+            raycaster.ray.intersectPlane(planeZ, mouse3D);
+        }
+
+        function resetMousePosition() {
+            mouse3D.set(9999, 9999, 9999);
+        }
+
+        window.addEventListener('pointermove', updateMousePosition);
+        window.addEventListener('pointerleave', resetMousePosition);
+        window.addEventListener('pointercancel', resetMousePosition);
+        window.addEventListener('touchmove', updateMousePosition, { passive: true });
+        window.addEventListener('touchend', resetMousePosition, { passive: true });
+
+        // Configuração da timeline do GSAP com sequenciamento de Morphing
         const maxDelay = (vertices.length / 3) * 0.002;
         const maxTime = maxDelay + 5.0; // Duração máxima original
 
-        const progressObj = { value: 0 };
-        tl = gsap.timeline({ repeat: -1, yoyo: true, repeatDelay: 3.0 });
-        tl.to(progressObj, {
-            value: maxTime,
-            duration: 9.0, // Animação muito mais lenta e elegante
-            ease: "sine.inOut",
-            onUpdate: () => {
-                material.uniforms.uProgress.value = progressObj.value;
-            }
-        });
+        const animationState = { uProgress: 0.0, uMorphProgress: 0.0 };
+
+        function updateUniforms() {
+            material.uniforms.uProgress.value = animationState.uProgress;
+            material.uniforms.uMorphProgress.value = animationState.uMorphProgress;
+        }
+
+        tl = gsap.timeline({ repeat: -1, yoyo: false });
+        tl
+            // 1. Forma o coração a partir da nuvem dispersa
+            .to(animationState, {
+                uProgress: maxTime,
+                duration: 9.0,
+                ease: "sine.inOut",
+                onUpdate: updateUniforms
+            })
+            // 2. Mantém o coração formado para visualização
+            .to({}, { duration: 3.0 })
+            // 3. Transforma o coração no símbolo do infinito
+            .to(animationState, {
+                uMorphProgress: 1.0,
+                duration: 7.0,
+                ease: "power2.inOut",
+                onUpdate: updateUniforms
+            })
+            // 4. Mantém o símbolo do infinito formado
+            .to({}, { duration: 3.0 })
+            // 5. Desfaz o infinito de volta em poeira estelar
+            .to(animationState, {
+                uProgress: 0.0,
+                duration: 9.0,
+                ease: "sine.inOut",
+                onUpdate: updateUniforms
+            })
+            // 6. Reseta silenciosamente o morphing enquanto as partículas estão dispersas
+            .to(animationState, {
+                uMorphProgress: 0.0,
+                duration: 0.1,
+                onUpdate: updateUniforms
+            })
+            // 7. Mantém a nuvem dispersa antes de reiniciar o ciclo
+            .to({}, { duration: 2.0 });
 
         // Loop de Renderização otimizado (0% de esforço da CPU em loops complexos)
         let clock = new THREE.Clock();
@@ -432,8 +522,12 @@
             // Atualiza os controles
             controls.update();
 
-            // Rotação sutil automática do sistema inteiro para dinamismo 3D
+            // Atualizar uniforms de tempo e mouse
             const time = clock.getElapsedTime();
+            material.uniforms.uTime.value = time;
+            material.uniforms.uMouse.value.copy(mouse3D);
+
+            // Rotação sutil automática do sistema inteiro para dinamismo 3D
             particleSystem.rotation.y = Math.sin(time * 0.15) * 0.1;
             particleSystem.rotation.x = Math.cos(time * 0.08) * 0.08;
 
@@ -446,6 +540,9 @@
 
         // Reiniciar a animação ao tocar/clicar em qualquer lugar da tela
         window.addEventListener('click', () => {
+            animationState.uProgress = 0.0;
+            animationState.uMorphProgress = 0.0;
+            updateUniforms();
             tl.restart();
         });
     </script>
